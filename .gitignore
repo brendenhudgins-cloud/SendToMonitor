@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+.idea/
+
+# Demo video project (scripts, voice takes, renders). The finished video is in docs/.
+demo/
+
+# OS clutter
+Thumbs.db
+Desktop.ini
+.DS_Store

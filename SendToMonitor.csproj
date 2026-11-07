@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>SendToMonitor</RootNamespace>
+    <AssemblyName>SendToMonitor</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>SendToMonitor</Product>
+    <Description>Right-click a title bar to send the window to another monitor.</Description>
+    <Authors>Brenden Hudgins</Authors>
+    <Copyright>Copyright (c) 2026 Brenden Hudgins. MIT License.</Copyright>
+    <!-- Deterministic, path-independent builds, so a release exe can be compared with one built from the same commit. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- DPI awareness (Per-Monitor V2) is declared in app.manifest so it applies before any code runs. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- WFAC010: "remove DPI settings from app.manifest" - we deliberately keep them there. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <!-- Single-file publish: keep everything in one exe, but uncompressed. A compressed,
+       self-extracting bundle looks like a packed executable to antivirus heuristics. -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true' And '$(SelfContained)' == 'true'">
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="app.ico" LogicalName="SendToMonitor.app.ico" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,101 @@
+# Publishes a GitHub release when a version tag is pushed:
+#
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# Both exes are built here on GitHub's runners, never on a personal PC. Each gets a
+# SHA-256 hash in the release notes and a signed build-provenance attestation that ties
+# it to this workflow and commit (check it with `gh attestation verify`).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write      # create the release
+  id-token: write      # sign the attestation
+  attestations: write  # store the attestation
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          New-Item -ItemType Directory -Force dist | Out-Null
+
+          # Runs on any 64-bit Windows 11 PC: the .NET runtime is bundled inside. The exe is
+          # left uncompressed (about 140 MB) so it doesn't look packed to antivirus scanners,
+          # and shipped zipped (about 58 MB) to keep the download small.
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+            -p:Version=$version -o publish/standalone
+          Compress-Archive publish/standalone/SendToMonitor.exe dist/SendToMonitor-x64.zip
+
+          # Small exe for PCs that already have the .NET 8 Desktop Runtime.
+          dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true `
+            -p:Version=$version -o publish/small
+          Copy-Item publish/small/SendToMonitor.exe dist/SendToMonitor-x64-requires-dotnet8.exe
+
+      # Code signing goes here once the project is accepted by SignPath Foundation
+      # (https://signpath.org): upload dist/ as an artifact, submit it to SignPath, and
+      # download the signed exes back into dist/ before the hashes are taken.
+
+      - name: Hashes
+        run: |
+          # The zip, the small exe, and SendToMonitor.exe (the exe inside the zip).
+          $files = @(Get-Item dist/*.zip, dist/*.exe) + (Get-Item publish/standalone/SendToMonitor.exe)
+          $files | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Encoding utf8 dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/SendToMonitor-x64.zip
+            dist/SendToMonitor-x64-requires-dotnet8.exe
+            publish/standalone/SendToMonitor.exe
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sums = (Get-Content dist/SHA256SUMS.txt -Raw).TrimEnd()
+          $notes = @"
+          ### Downloads
+
+          | File | Use it if |
+          |---|---|
+          | ``SendToMonitor-x64.zip`` | You're not sure. Unzip and run ``SendToMonitor.exe`` on any 64-bit Windows 11 PC, no install needed. |
+          | ``SendToMonitor-x64-requires-dotnet8.exe`` | You already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0). Same app, much smaller download. |
+
+          Both were built by GitHub Actions from commit ${{ github.sha }}.
+
+          ### SHA-256
+
+          ``SendToMonitor.exe`` is the exe inside the zip.
+
+          ``````
+          $sums
+          ``````
+
+          Check that a download was built by this repository's release workflow:
+
+          ``````
+          gh attestation verify SendToMonitor.exe --repo ${{ github.repository }}
+          ``````
+          "@
+          Set-Content -Encoding utf8 notes.md $notes
+          gh release create "${{ github.ref_name }}" (Get-ChildItem dist/*).FullName `
+            --title "SendToMonitor ${{ github.ref_name }}" --notes-file notes.md
