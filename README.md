@@ -4,9 +4,9 @@ A tiny Windows 11 tray utility: **right-click any window's title bar** and pick 
 
 Handy on big multi-monitor setups, and when you're remoted into a multi-monitor PC from a single screen: bring windows from the monitors you can't see to the one you can.
 
-[![30-second demo video](docs/demo-poster.png)](docs/SendToMonitor-demo.mp4)
+![Right-click a title bar to send a window to another monitor, or right-click an empty taskbar to bring a window over](docs/demo.gif)
 
-*Click the image for the 30-second demo (with sound).*
+*Full 30-second demo with sound, including monitor names and remote sessions: [SendToMonitor-demo.mp4](docs/SendToMonitor-demo.mp4).*
 
 ## Download
 
