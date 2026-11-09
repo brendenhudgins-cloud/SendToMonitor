@@ -29,10 +29,18 @@ internal static class TitleBarDetector
         int hit = HitTest(hwnd, lParam);
         bool caption = false;
 
-        if (hit == Native.HTCAPTION)
+        if (hit == Native.HTCAPTION && hwnd == root)
+        {
+            // Usually a plain title bar. But WindowFromPoint skips XAML island content hosts
+            // (Windows Terminal's tabs and terminal text, for example): they get mouse input through
+            // composition, not window hit-testing, and Windows Terminal's root answers HTCAPTION for
+            // its whole client area. If a child window covers the point and claims it, it's content.
+            caption = !ChildClaimsPoint(root, pt, lParam);
+        }
+        else if (hit == Native.HTCAPTION)
         {
             // A child with its own caption (e.g. an MDI child) owns that caption: leave it alone.
-            caption = hwnd == root || !HasOwnCaption(hwnd);
+            caption = !HasOwnCaption(hwnd);
         }
         else if (root != hwnd && (hit == Native.HTTRANSPARENT || hit == Native.HTNOWHERE || hit == Native.HTERROR))
         {
@@ -57,6 +65,30 @@ internal static class TitleBarDetector
             Native.SMTO_ABORTIFHUNG | Native.SMTO_NORMAL, HitTestTimeoutMs, out IntPtr result);
         return ok == IntPtr.Zero ? Native.HTERROR : (int)result.ToInt64();
     }
+
+    /// <summary>
+    /// True if a visible, enabled, non-transparent child of <paramref name="root"/> covers the point
+    /// and answers something other than caption/transparent (normally HTCLIENT). Ordinary title bars
+    /// have no child over them, so this costs nothing there.
+    /// </summary>
+    private static bool ChildClaimsPoint(IntPtr root, POINT pt, IntPtr lParam)
+    {
+        POINT client = pt;
+        if (!ScreenToClient(root, ref client)) return false;
+        IntPtr child = ChildWindowFromPointEx(root, client, CWP_SKIPINVISIBLE | CWP_SKIPDISABLED | CWP_SKIPTRANSPARENT);
+        if (child == IntPtr.Zero || child == root) return false;
+
+        int hit = HitTest(child, lParam);
+        return hit != Native.HTCAPTION && hit != Native.HTTRANSPARENT && hit != Native.HTNOWHERE && hit != Native.HTERROR;
+    }
+
+    private const uint CWP_SKIPINVISIBLE = 0x1, CWP_SKIPDISABLED = 0x2, CWP_SKIPTRANSPARENT = 0x4;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr ChildWindowFromPointEx(IntPtr parent, POINT point, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
     private static bool HasOwnCaption(IntPtr hwnd)
     {
